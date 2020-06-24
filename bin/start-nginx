@@ -3,6 +3,7 @@
 psmgr=/tmp/nginx-buildpack-wait
 rm -f $psmgr
 mkfifo $psmgr
+id=$( hexdump -n 16 -e '4/4 "%08X" 1 "\n"' /dev/random )
 
 # Evaluate config to get $PORT
 erb config/nginx.conf.erb > config/nginx.conf
@@ -19,7 +20,7 @@ done
 # Initialize log directory.
 mkdir -p logs/nginx
 touch logs/nginx/access.log logs/nginx/error.log
-echo 'buildpack=nginx at=logs-initialized'
+echo "buildpack=nginx at=logs-initialized id=$id"
 
 # Start log redirection.
 (
@@ -33,7 +34,7 @@ echo 'buildpack=nginx at=logs-initialized'
   # Take the command passed to this bin and start it.
   # E.g. bin/start-nginx bundle exec unicorn -c config/unicorn.rb
   COMMAND=${@:$n}
-  echo "buildpack=nginx at=start-app cmd=$COMMAND"
+  echo "buildpack=nginx at=start-app cmd=$COMMAND $id"
   $COMMAND
   echo 'app' >$psmgr
 ) &
@@ -46,17 +47,18 @@ then
   # are app is ready for traffic.
   while [[ ! -f "$FILE" ]]
   do
-    echo 'buildpack=nginx at=app-initialization'
+    echo "buildpack=nginx at=app-initialization id=$id $HEROKU_SLUG_COMMIT"
+    ls /tmp
     sleep 1
   done
-  echo 'buildpack=nginx at=app-initialized'
+  echo "buildpack=nginx at=app-initialized id=$id"
 fi
 
 # Start nginx
 (
   # We expect nginx to run in foreground.
   # We also expect a socket to be at /tmp/nginx.socket.
-  echo 'buildpack=nginx at=nginx-start'
+  echo "buildpack=nginx at=nginx-start id=$id"
   bin/nginx -p . -c config/nginx.conf
   echo 'nginx' >$psmgr
 ) &
